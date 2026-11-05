@@ -1,0 +1,50 @@
+name: Sync upstream
+
+# Auto-sync this fork with iterativv/NostalgiaForInfinity
+# Runs on a schedule (every 6 hours) and can also be triggered manually.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    name: Sync fork with upstream
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Sync upstream main
+        run: |
+          git remote add upstream https://github.com/iterativv/NostalgiaForInfinity.git
+          git fetch upstream main
+          git checkout main
+          if git merge --ff-only upstream/main; then
+            echo "Fast-forward merge possible."
+          else
+            echo "Fork diverged from upstream, hard-resetting to upstream/main."
+            git merge --abort 2>/dev/null || true
+            git reset --hard upstream/main
+          fi
+          if git diff --quiet origin/main HEAD; then
+            echo "Already up to date, nothing to push."
+          else
+            git push origin main
+          fi
+
+      - name: Sync timestamp summary
+        run: |
+          echo "Fork main is now at: $(git rev-parse --short upstream/main)"
+          echo "Upstream latest commit: $(git log -1 --format='%h %s (%ci)' upstream/main)"
